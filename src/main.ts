@@ -1,59 +1,28 @@
-import https from 'https'
-import {URL} from 'url'
-
 import * as core from '@actions/core'
-import {downloadTool, cacheFile} from '@actions/tool-cache'
+import * as tc from '@actions/tool-cache'
+import * as fs from 'fs'
+
+const BAZELISK_VERSION = 'v1.12.0'
 
 async function run(): Promise<void> {
-  try {
-    const data = await get({
-      host: new URL(process.env.GITHUB_API_URL as string).hostname,
-      port: 443,
-      path: '/repos/bazelbuild/bazelisk/releases/latest',
-      method: 'GET',
-      headers: {
-        'user-agent': 'suyash/actions-bazelisk'
-      }
-    })
+  core.info('Running actions-bazelisk')
 
-    const bazelisk = await downloadTool(
-      `${process.env.GITHUB_SERVER_URL}/bazelbuild/bazelisk/releases/download/${
-        data.tag_name
-      }/${releaseName()}`
-    )
+  const GITHUB_SERVER_URL = process.env.GITHUB_SERVER_URL
+  const bazelisk = await tc.downloadTool(
+    `${GITHUB_SERVER_URL}/bazelbuild/bazelisk/releases/download/${BAZELISK_VERSION}/${releaseName()}`
+  )
 
-    const cachedPath = await cacheFile(
-      bazelisk,
-      process.platform === 'win32' ? 'bazel.exe' : 'bazel',
-      'bazel',
-      data.tag_name
-    )
+  await fs.promises.chmod(bazelisk, 0o755)
 
-    core.debug(`bazelisk downloaded and cached at ${cachedPath}`)
+  const cachedPath = await tc.cacheFile(
+    bazelisk,
+    process.platform === 'win32' ? 'bazelisk.exe' : 'bazelisk',
+    'bazelisk',
+    BAZELISK_VERSION
+  )
 
-    core.addPath(cachedPath)
-  } catch (error) {
-    core.setFailed(error.message)
-  }
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function get(url: https.RequestOptions): Promise<any> {
-  return new Promise((resolve, reject) => {
-    const req = https.get(url, res => {
-      let data = ''
-
-      res.on('data', chunk => {
-        data += chunk
-      })
-
-      res.on('end', () => {
-        resolve(JSON.parse(data))
-      })
-    })
-
-    req.on('error', reject)
-  })
+  core.info(`bazelisk downloaded and cached at ${cachedPath}`)
+  core.addPath(cachedPath)
 }
 
 function releaseName(): string {
